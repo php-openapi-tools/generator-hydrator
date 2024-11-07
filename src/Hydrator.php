@@ -79,6 +79,7 @@ final readonly class Hydrator implements FileGenerator
                     ),
                     trim($hydrator->className->fullyQualified->source, '\\'),
                 ),
+                File::DO_LOAD_ON_WRITE,
             );
 
             $schemaClasses = [];
@@ -331,6 +332,6 @@ final readonly class Hydrator implements FileGenerator
             );
         }
 
-        yield new File($package->destination->source, $hydratorClassName->relative, $stmt->addStmt($class)->getNode());
+        yield new File($package->destination->source, $hydratorClassName->relative, $stmt->addStmt($class)->getNode(), File::DO_LOAD_ON_WRITE);
     }
 }
