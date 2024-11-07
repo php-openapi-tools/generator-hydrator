@@ -92,6 +92,7 @@ final class HydratorTest extends TestCase
                     ]),
                     $generatedFile->contents,
                 ]),
+                File::DO_LOAD_ON_WRITE,
             );
         }
 
