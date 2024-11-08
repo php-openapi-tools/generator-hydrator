@@ -23,6 +23,7 @@ use function array_key_exists;
 use function array_map;
 use function array_unique;
 use function count;
+use function trim;
 use function ucfirst;
 
 final readonly class Hydrator implements FileGenerator
@@ -76,7 +77,7 @@ final readonly class Hydrator implements FileGenerator
                             static fn (string $className): bool => count((new ReflectionMethod($className, '__construct'))->getParameters()) > 0,
                         ),
                     ),
-                    $hydrator->className->fullyQualified->source,
+                    trim($hydrator->className->fullyQualified->source, '\\'),
                 ),
                 File::DO_LOAD_ON_WRITE,
             );
