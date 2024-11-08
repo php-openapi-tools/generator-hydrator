@@ -23,7 +23,6 @@ use function array_key_exists;
 use function array_map;
 use function array_unique;
 use function count;
-use function trim;
 use function ucfirst;
 
 final readonly class Hydrator implements FileGenerator
@@ -64,7 +63,7 @@ final readonly class Hydrator implements FileGenerator
         $schemaClasses = [];
         foreach ($hydrators as $hydrator) {
             foreach ($hydrator->schemas as $schema) {
-                $schemaClasses[] = trim($schema->className->fullyQualified->source, '\\');
+                $schemaClasses[] = $schema->className->fullyQualified->source;
             }
 
             yield new File(
@@ -77,7 +76,7 @@ final readonly class Hydrator implements FileGenerator
                             static fn (string $className): bool => count((new ReflectionMethod($className, '__construct'))->getParameters()) > 0,
                         ),
                     ),
-                    trim($hydrator->className->fullyQualified->source, '\\'),
+                    $hydrator->className->fullyQualified->source,
                 ),
                 File::DO_LOAD_ON_WRITE,
             );
@@ -294,7 +293,7 @@ final readonly class Hydrator implements FileGenerator
 
         foreach ($hydrators as $hydrator) {
             $class->addStmt(
-                $this->builderFactory->method('getObjectMapper' . ucfirst($hydrator->methodName))->makePublic()->setReturnType(trim($hydrator->className->fullyQualified->source, '\\'))->addStmts([
+                $this->builderFactory->method('getObjectMapper' . ucfirst($hydrator->methodName))->makePublic()->setReturnType($hydrator->className->fullyQualified->source)->addStmts([
                     new Node\Stmt\If_(
                         new Node\Expr\BinaryOp\Identical(
                             new Node\Expr\Instanceof_(

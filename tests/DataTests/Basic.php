@@ -20,7 +20,7 @@ final class Basic extends TestCase
         self::assertStringContainsString('public function hydrateObjects(string $className, iterable $payloads) : \EventSauce\ObjectHydrator\IterableList', $files['Internal\Hydrators']->contents);
         self::assertStringContainsString('public function serializeObject(object $object) : mixed', $files['Internal\Hydrators']->contents);
         self::assertStringContainsString('public function serializeObjects(iterable $payloads) : \EventSauce\ObjectHydrator\IterableList', $files['Internal\Hydrators']->contents);
-        self::assertStringContainsString('public function getObjectMapperOperation🌀Root() : ApiClients\Client\GitHub\Internal\Hydrator\Operation\Root', $files['Internal\Hydrators']->contents);
+        self::assertStringContainsString('public function getObjectMapperOperation🌀Root() : \ApiClients\Client\GitHub\Internal\Hydrator\Operation\Root', $files['Internal\Hydrators']->contents);
         self::assertStringContainsString('final class Hydrators implements \EventSauce\ObjectHydrator\ObjectMapper', $files['Internal\Hydrators']->contents);
 
         self::assertStringContainsString('public function hydrateObject(string $className, array $payload): object', $files['Internal\Hydrator\Operation\Root']->contents);
