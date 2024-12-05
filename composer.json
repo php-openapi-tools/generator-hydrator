@@ -18,6 +18,7 @@
     },
     "require-dev": {
         "openapi-tools/gatherer": "dev-main",
+        "openapi-tools/generator-schema": "dev-main",
         "openapi-tools/test-data": "dev-main",
         "wyrihaximus/test-utilities": "^6.0.10"
     },

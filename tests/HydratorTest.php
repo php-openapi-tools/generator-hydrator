@@ -9,6 +9,7 @@ use OpenAPITools\Configuration\Gathering;
 use OpenAPITools\Configuration\Package;
 use OpenAPITools\Gatherer\Gatherer;
 use OpenAPITools\Generator\Hydrator\Hydrator;
+use OpenAPITools\Generator\Schema\Schema;
 use OpenAPITools\Representation\Representation;
 use OpenAPITools\TestData\DataSet;
 use OpenAPITools\TestData\Provider;
@@ -59,8 +60,8 @@ final class HydratorTest extends TestCase
                 'tests',
             ),
             new Namespace_(
-                'ApiClients\Client\GitHub',
-                'ApiClients\Tests\Client\GitHub',
+                'ApiClients\Client\GitHub\\' . $dataSet->name,
+                'ApiClients\Tests\Client\GitHub\\' . $dataSet->name,
             ),
             new Package\QA(
                 phpcs: new Package\QA\Tool(true, null),
@@ -79,8 +80,19 @@ final class HydratorTest extends TestCase
             [],
         );
 
-        $files          = [];
-        $generatedFiles = (new Hydrator(new BuilderFactory()))->generate($package, $representation->namespace($package->namespace));
+        $files        = [];
+        $buildFactory = new BuilderFactory();
+        foreach ((new Schema($buildFactory))->generate($package, $representation->namespace($package->namespace)) as $file) {
+            /** @phpstan-ignore-next-line */
+            eval((new Standard())->prettyPrint([
+                new Node\Stmt\Declare_([
+                    new Node\Stmt\DeclareDeclare('strict_types', new Node\Scalar\LNumber(1)),
+                ]),
+                $file->contents,
+            ]));
+        }
+
+        $generatedFiles = (new Hydrator($buildFactory))->generate($package, $representation->namespace($package->namespace));
 
         foreach ($generatedFiles as $generatedFile) {
             $files[$generatedFile->fqcn] = new File(

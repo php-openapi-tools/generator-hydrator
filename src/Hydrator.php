@@ -64,7 +64,7 @@ final readonly class Hydrator implements FileGenerator
         $schemaClasses = [];
         foreach ($hydrators as $hydrator) {
             foreach ($hydrator->schemas as $schema) {
-                $schemaClasses[] = $schema->className->fullyQualified->source;
+                $schemaClasses[] = trim($schema->className->fullyQualified->source, '\\');
             }
 
             yield new File(
