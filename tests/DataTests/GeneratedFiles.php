@@ -7,11 +7,14 @@ namespace OpenAPITools\Tests\Generator\Hydrator\DataTests;
 use OpenAPITools\Utils\File;
 use PHPUnit\Framework\Assert;
 
-final class ExampleData implements GeneratedFilesAssertion
+final class GeneratedFiles
 {
     /** @param array<string, File> $files */
-    public static function assertGeneratedFiles(array $files): void
+    public static function contents(array $files, string $key): string
     {
-        Assert::assertCount(2, $files);
+        $contents = $files[$key]->contents;
+        Assert::assertIsString($contents);
+
+        return $contents;
     }
 }
