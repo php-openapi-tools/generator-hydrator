@@ -9,9 +9,11 @@ use OpenAPITools\Configuration\Gathering;
 use OpenAPITools\Configuration\Package;
 use OpenAPITools\Gatherer\Gatherer;
 use OpenAPITools\Generator\Hydrator\Hydrator;
+use OpenAPITools\Generator\Schema\Schema;
 use OpenAPITools\Representation\Representation;
 use OpenAPITools\TestData\DataSet;
 use OpenAPITools\TestData\Provider;
+use OpenAPITools\Tests\Generator\Hydrator\DataTests\GeneratedFilesAssertion;
 use OpenAPITools\Utils\File;
 use OpenAPITools\Utils\Namespace_;
 use PhpParser\BuilderFactory;
@@ -21,10 +23,9 @@ use PHPUnit\Framework\Attributes\DataProviderExternal;
 use PHPUnit\Framework\Attributes\Test;
 use WyriHaximus\TestUtilities\TestCase;
 
-use function call_user_func;
 use function class_exists;
 use function is_string;
-use function method_exists;
+use function is_subclass_of;
 
 final class HydratorTest extends TestCase
 {
@@ -32,11 +33,12 @@ final class HydratorTest extends TestCase
     #[DataProviderExternal(Provider::class, 'sets')]
     public function gather(DataSet $dataSet): void
     {
-        $representation = self::loadSpec($dataSet->fileName);
+        $representation = $this->loadSpec($dataSet->fileName);
 
+        /** @var class-string<GeneratedFilesAssertion> $testClassName */
         $testClassName = '\OpenAPITools\Tests\Generator\Hydrator\DataTests\\' . $dataSet->name;
         self::assertTrue(class_exists($testClassName));
-        self::assertTrue(method_exists($testClassName, 'assert'));
+        self::assertTrue(is_subclass_of($testClassName, GeneratedFilesAssertion::class));
 
         $package = new Package(
             new Package\Metadata(
@@ -59,8 +61,8 @@ final class HydratorTest extends TestCase
                 'tests',
             ),
             new Namespace_(
-                'ApiClients\Client\GitHub',
-                'ApiClients\Tests\Client\GitHub',
+                'ApiClients\Client\GitHub\\' . $dataSet->name,
+                'ApiClients\Tests\Client\GitHub\\' . $dataSet->name,
             ),
             new Package\QA(
                 phpcs: new Package\QA\Tool(true, null),
@@ -79,28 +81,45 @@ final class HydratorTest extends TestCase
             [],
         );
 
-        $files          = [];
-        $generatedFiles = (new Hydrator(new BuilderFactory()))->generate($package, $representation->namespace($package->namespace));
+        $files        = [];
+        $buildFactory = new BuilderFactory();
+        foreach (new Schema($buildFactory)->generate($package, $representation->namespace($package->namespace)) as $file) {
+            self::assertInstanceOf(Node::class, $file->contents);
+            /** @phpstan-ignore ergebnis.noEval */
+            eval(new Standard()->prettyPrint([
+                new Node\Stmt\Declare_([
+                    new Node\Stmt\DeclareDeclare('strict_types', new Node\Scalar\LNumber(1)),
+                ]),
+                $file->contents,
+            ]));
+        }
+
+        $generatedFiles = new Hydrator($buildFactory)->generate($package, $representation->namespace($package->namespace));
 
         foreach ($generatedFiles as $generatedFile) {
-            $files[$generatedFile->fqcn] = new File(
-                $generatedFile->pathPrefix,
-                $generatedFile->fqcn,
-                is_string($generatedFile->contents) ? $generatedFile->contents : (new Standard())->prettyPrint([
+            if (is_string($generatedFile->contents)) {
+                $contents = $generatedFile->contents;
+            } else {
+                $contents = new Standard()->prettyPrint([
                     new Node\Stmt\Declare_([
                         new Node\Stmt\DeclareDeclare('strict_types', new Node\Scalar\LNumber(1)),
                     ]),
                     $generatedFile->contents,
-                ]),
+                ]);
+            }
+
+            $files[$generatedFile->fqcn] = new File(
+                $generatedFile->pathPrefix,
+                $generatedFile->fqcn,
+                $contents,
                 File::DO_LOAD_ON_WRITE,
             );
         }
 
-        // @phpstan-ignore argument.type
-        call_user_func($testClassName . '::assert', ...$files); // phpcs:disable
+        $testClassName::assertGeneratedFiles($files);
     }
 
-    private static function loadSpec(string $dataSetName): Representation
+    private function loadSpec(string $dataSetName): Representation
     {
         return Gatherer::gather(
             Reader::readFromYamlFile($dataSetName),

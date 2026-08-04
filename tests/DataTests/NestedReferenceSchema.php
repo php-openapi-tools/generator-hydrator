@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace OpenAPITools\Tests\Generator\Hydrator\DataTests;
 
 use OpenAPITools\Utils\File;
-use WyriHaximus\TestUtilities\TestCase;
+use PHPUnit\Framework\Assert;
 
-final class NestedReferenceSchema extends TestCase
+final class NestedReferenceSchema implements GeneratedFilesAssertion
 {
-    public static function assert(File ...$files): void
+    /** @param array<string, File> $files */
+    public static function assertGeneratedFiles(array $files): void
     {
-        self::assertCount(2, $files);
+        Assert::assertCount(2, $files);
     }
 }
