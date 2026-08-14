@@ -9,13 +9,17 @@ use EventSauce\ObjectHydrator\ObjectMapperCodeGenerator;
 use Generator;
 use OpenAPITools\Contract\FileGenerator;
 use OpenAPITools\Contract\Package;
+use OpenAPITools\Generator\Utils\Builder\ExpressionBuilder;
+use OpenAPITools\Generator\Utils\Builder\MatchBuilder;
+use OpenAPITools\Generator\Utils\Builder\StatementBuilder;
 use OpenAPITools\Representation;
 use OpenAPITools\Utils\ClassString;
 use OpenAPITools\Utils\File;
 use OpenAPITools\Utils\Namespace_;
 use PhpParser\Builder\Param;
 use PhpParser\BuilderFactory;
-use PhpParser\Node;
+use PhpParser\Node\Expr\Match_;
+use PhpParser\Node\Stmt\Return_;
 use ReflectionMethod;
 
 use function array_filter;
@@ -32,8 +36,10 @@ final readonly class Hydrator implements FileGenerator
 {
     private const string ITERABLE_LIST_CLASS = '\\EventSauce\\ObjectHydrator\\IterableList';
 
-    public function __construct(private BuilderFactory $builderFactory)
-    {
+    public function __construct(
+        private BuilderFactory $builderFactory,
+        private bool $includeWebHookHydrators,
+    ) {
     }
 
     /** @return iterable<File> */
@@ -51,6 +57,10 @@ final readonly class Hydrator implements FileGenerator
         }
 
         foreach ($representation->webHooks as $webHookEvent) {
+            if (! $this->includeWebHookHydrators) {
+                continue;
+            }
+
             $hydrators[] = $webHookEvent->hydrator;
         }
 
@@ -109,30 +119,8 @@ final readonly class Hydrator implements FileGenerator
                 new Param('className')->setType('string'),
                 new Param('payload')->setType('array'),
             ])->addStmt(
-                new Node\Stmt\Return_(
-                    new Node\Expr\Match_(
-                        new Node\Expr\Variable('className'),
-                        array_map(static fn (Representation\Namespaced\Hydrator $hydrator): Node\MatchArm => new Node\MatchArm(
-                            array_map(static fn (Representation\Namespaced\Schema $schema): Node\Scalar\String_ => new Node\Scalar\String_(
-                                $schema->className->fullyQualified->source,
-                            ), $usefullHydrators[$hydrator->className->relative]),
-                            new Node\Expr\MethodCall(
-                                new Node\Expr\MethodCall(
-                                    new Node\Expr\Variable('this'),
-                                    'getObjectMapper' . ucfirst($hydrator->methodName),
-                                ),
-                                'hydrateObject',
-                                [
-                                    new Node\Arg(
-                                        new Node\Expr\Variable('className'),
-                                    ),
-                                    new Node\Arg(
-                                        new Node\Expr\Variable('payload'),
-                                    ),
-                                ],
-                            ),
-                        ), $matchHydrators),
-                    ),
+                new Return_(
+                    $this->objectMapperMatch($matchHydrators, $usefullHydrators, 'hydrateObject', ['className', 'payload']),
                 ),
             ),
         );
@@ -142,26 +130,10 @@ final readonly class Hydrator implements FileGenerator
                 new Param('className')->setType('string'),
                 new Param('payloads')->setType('iterable'),
             ])->addStmt(
-                new Node\Stmt\Return_(
-                    new Node\Expr\New_(
-                        new Node\Name(self::ITERABLE_LIST_CLASS),
-                        [
-                            new Node\Arg(
-                                new Node\Expr\MethodCall(
-                                    new Node\Expr\Variable('this'),
-                                    'doHydrateObjects',
-                                    [
-                                        new Node\Arg(
-                                            new Node\Expr\Variable('className'),
-                                        ),
-                                        new Node\Arg(
-                                            new Node\Expr\Variable('payloads'),
-                                        ),
-                                    ],
-                                ),
-                            ),
-                        ],
-                    ),
+                new Return_(
+                    ExpressionBuilder::newInstance(self::ITERABLE_LIST_CLASS, [
+                        ExpressionBuilder::thisMethod('doHydrateObjects', ['className', 'payloads']),
+                    ]),
                 ),
             ),
         );
@@ -171,32 +143,7 @@ final readonly class Hydrator implements FileGenerator
                 new Param('className')->setType('string'),
                 new Param('payloads')->setType('iterable'),
             ])->addStmt(
-                new Node\Stmt\Foreach_(
-                    new Node\Expr\Variable('payloads'),
-                    new Node\Expr\Variable('payload'),
-                    [
-                        'keyVar' => new Node\Expr\Variable('index'),
-                        'stmts' => [
-                            new Node\Stmt\Expression(
-                                new Node\Expr\Yield_(
-                                    new Node\Expr\MethodCall(
-                                        new Node\Expr\Variable('this'),
-                                        'hydrateObject',
-                                        [
-                                            new Node\Arg(
-                                                new Node\Expr\Variable('className'),
-                                            ),
-                                            new Node\Arg(
-                                                new Node\Expr\Variable('payload'),
-                                            ),
-                                        ],
-                                    ),
-                                    new Node\Expr\Variable('index'),
-                                ),
-                            ),
-                        ],
-                    ],
-                ),
+                StatementBuilder::yieldMapOverIterable('payloads', 'payload', 'index', 'hydrateObject', ['className', 'payload']),
             ),
         );
 
@@ -204,22 +151,11 @@ final readonly class Hydrator implements FileGenerator
             $this->builderFactory->method('serializeObject')->makePublic()->setReturnType('mixed')->addParams([
                 new Param('object')->setType('object'),
             ])->addStmt(
-                new Node\Stmt\Return_(
-                    new Node\Expr\MethodCall(
-                        new Node\Expr\Variable('this'),
-                        'serializeObjectOfType',
-                        [
-                            new Node\Arg(
-                                new Node\Expr\Variable('object'),
-                            ),
-                            new Node\Arg(
-                                new Node\Expr\ClassConstFetch(
-                                    new Node\Expr\Variable('object'),
-                                    'class',
-                                ),
-                            ),
-                        ],
-                    ),
+                new Return_(
+                    ExpressionBuilder::thisMethod('serializeObjectOfType', [
+                        'object',
+                        ExpressionBuilder::objectClassConstant('object'),
+                    ]),
                 ),
             ),
         );
@@ -229,27 +165,8 @@ final readonly class Hydrator implements FileGenerator
                 new Param('object')->setType('object'),
                 new Param('className')->setType('string'),
             ])->addStmt(
-                new Node\Stmt\Return_(
-                    new Node\Expr\Match_(
-                        new Node\Expr\Variable('className'),
-                        array_map(static fn (Representation\Namespaced\Hydrator $hydrator): Node\MatchArm => new Node\MatchArm(
-                            array_map(static fn (Representation\Namespaced\Schema $schema): Node\Scalar\String_ => new Node\Scalar\String_(
-                                $schema->className->fullyQualified->source,
-                            ), $usefullHydrators[$hydrator->className->relative]),
-                            new Node\Expr\MethodCall(
-                                new Node\Expr\MethodCall(
-                                    new Node\Expr\Variable('this'),
-                                    'getObjectMapper' . ucfirst($hydrator->methodName),
-                                ),
-                                'serializeObject',
-                                [
-                                    new Node\Arg(
-                                        new Node\Expr\Variable('object'),
-                                    ),
-                                ],
-                            ),
-                        ), $matchHydrators),
-                    ),
+                new Return_(
+                    $this->objectMapperMatch($matchHydrators, $usefullHydrators, 'serializeObject', ['object']),
                 ),
             ),
         );
@@ -258,23 +175,10 @@ final readonly class Hydrator implements FileGenerator
             $this->builderFactory->method('serializeObjects')->makePublic()->setReturnType(self::ITERABLE_LIST_CLASS)->addParams([
                 new Param('payloads')->setType('iterable'),
             ])->addStmt(
-                new Node\Stmt\Return_(
-                    new Node\Expr\New_(
-                        new Node\Name(self::ITERABLE_LIST_CLASS),
-                        [
-                            new Node\Arg(
-                                new Node\Expr\MethodCall(
-                                    new Node\Expr\Variable('this'),
-                                    'doSerializeObjects',
-                                    [
-                                        new Node\Arg(
-                                            new Node\Expr\Variable('payloads'),
-                                        ),
-                                    ],
-                                ),
-                            ),
-                        ],
-                    ),
+                new Return_(
+                    ExpressionBuilder::newInstance(self::ITERABLE_LIST_CLASS, [
+                        ExpressionBuilder::thisMethod('doSerializeObjects', ['payloads']),
+                    ]),
                 ),
             ),
         );
@@ -283,72 +187,45 @@ final readonly class Hydrator implements FileGenerator
             $this->builderFactory->method('doSerializeObjects')->makePrivate()->setReturnType('\\' . Generator::class)->addParams([
                 new Param('objects')->setType('iterable'),
             ])->addStmt(
-                new Node\Stmt\Foreach_(
-                    new Node\Expr\Variable('objects'),
-                    new Node\Expr\Variable('object'),
-                    [
-                        'keyVar' => new Node\Expr\Variable('index'),
-                        'stmts' => [
-                            new Node\Stmt\Expression(
-                                new Node\Expr\Yield_(
-                                    new Node\Expr\MethodCall(
-                                        new Node\Expr\Variable('this'),
-                                        'serializeObject',
-                                        [
-                                            new Node\Arg(
-                                                new Node\Expr\Variable('object'),
-                                            ),
-                                        ],
-                                    ),
-                                    new Node\Expr\Variable('index'),
-                                ),
-                            ),
-                        ],
-                    ],
-                ),
+                StatementBuilder::yieldMapOverIterable('objects', 'object', 'index', 'serializeObject', ['object']),
             ),
         );
 
         foreach ($hydrators as $hydrator) {
             $class->addStmt(
                 $this->builderFactory->method('getObjectMapper' . ucfirst($hydrator->methodName))->makePublic()->setReturnType($hydrator->className->fullyQualified->source)->addStmts([
-                    new Node\Stmt\If_(
-                        new Node\Expr\BinaryOp\Identical(
-                            new Node\Expr\Instanceof_(
-                                new Node\Expr\PropertyFetch(
-                                    new Node\Expr\Variable('this'),
-                                    $hydrator->methodName,
-                                ),
-                                new Node\Name($hydrator->className->fullyQualified->source),
-                            ),
-                            new Node\Expr\ConstFetch(new Node\Name('false')),
-                        ),
-                        [
-                            'stmts' => [
-                                new Node\Stmt\Expression(
-                                    new Node\Expr\Assign(
-                                        new Node\Expr\PropertyFetch(
-                                            new Node\Expr\Variable('this'),
-                                            $hydrator->methodName,
-                                        ),
-                                        new Node\Expr\New_(
-                                            new Node\Name($hydrator->className->fullyQualified->source),
-                                        ),
-                                    ),
-                                ),
-                            ],
-                        ],
-                    ),
-                    new Node\Stmt\Return_(
-                        new Node\Expr\PropertyFetch(
-                            new Node\Expr\Variable('this'),
-                            $hydrator->methodName,
-                        ),
-                    ),
+                    ExpressionBuilder::lazyInitIfNotInstance($hydrator->methodName, $hydrator->className->fullyQualified->source),
+                    ExpressionBuilder::returnProperty($hydrator->methodName),
                 ]),
             );
         }
 
         yield new File($typedPackage->destination->source, $hydratorClassName->relative, $stmt->addStmt($class)->getNode(), File::DO_LOAD_ON_WRITE);
+    }
+
+    /**
+     * @param list<Representation\Namespaced\Hydrator>              $matchHydrators
+     * @param array<string, list<Representation\Namespaced\Schema>> $usefullHydrators
+     * @param list<string>                                          $delegateArguments
+     */
+    private function objectMapperMatch(array $matchHydrators, array $usefullHydrators, string $delegateMethod, array $delegateArguments): Match_
+    {
+        return MatchBuilder::onClassNameStrings(
+            'className',
+            array_map(
+                static fn (Representation\Namespaced\Hydrator $hydrator): array => [
+                    'classNames' => array_map(
+                        static fn (Representation\Namespaced\Schema $schema): string => $schema->className->fullyQualified->source,
+                        $usefullHydrators[$hydrator->className->relative],
+                    ),
+                    'body' => ExpressionBuilder::methodCall(
+                        ExpressionBuilder::thisMethod('getObjectMapper' . ucfirst($hydrator->methodName)),
+                        $delegateMethod,
+                        $delegateArguments,
+                    ),
+                ],
+                $matchHydrators,
+            ),
+        );
     }
 }

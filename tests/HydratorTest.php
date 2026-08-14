@@ -23,6 +23,7 @@ use PHPUnit\Framework\Attributes\DataProviderExternal;
 use PHPUnit\Framework\Attributes\Test;
 use WyriHaximus\TestUtilities\TestCase;
 
+use function array_key_exists;
 use function class_exists;
 use function is_string;
 use function is_subclass_of;
@@ -81,10 +82,16 @@ final class HydratorTest extends TestCase
             [],
         );
 
-        $files        = [];
-        $buildFactory = new BuilderFactory();
+        $files         = [];
+        $buildFactory  = new BuilderFactory();
+        $loadedSchemas = [];
         foreach (new Schema($buildFactory)->generate($package, $representation->namespace($package->namespace)) as $file) {
             self::assertInstanceOf(Node::class, $file->contents);
+            if (array_key_exists($file->fqcn, $loadedSchemas)) {
+                continue;
+            }
+
+            $loadedSchemas[$file->fqcn] = true;
             /** @phpstan-ignore ergebnis.noEval */
             eval(new Standard()->prettyPrint([
                 new Node\Stmt\Declare_([
@@ -94,7 +101,7 @@ final class HydratorTest extends TestCase
             ]));
         }
 
-        $generatedFiles = new Hydrator($buildFactory)->generate($package, $representation->namespace($package->namespace));
+        $generatedFiles = new Hydrator($buildFactory, true)->generate($package, $representation->namespace($package->namespace));
 
         foreach ($generatedFiles as $generatedFile) {
             if (is_string($generatedFile->contents)) {
