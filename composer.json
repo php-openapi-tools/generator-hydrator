@@ -1,6 +1,6 @@
 {
     "name": "openapi-tools/generator-hydrator",
-    "description": "Schema (+ contract + error) generator",
+    "description": "Object hydrator generator for OpenAPI Tools schema classes",
     "license": "MIT",
     "authors": [
         {
