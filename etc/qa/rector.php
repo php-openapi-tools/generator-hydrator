@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 use Rector\Php55\Rector\String_\StringClassNameToClassConstantRector;
-use WyriHaximus\TestUtilities\RectorConfig;
+use WyriHaximus\RectorPHP\RectorConfig;
 
 return RectorConfig::configure(dirname(__DIR__, 2))
     ->withSkip([
