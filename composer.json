@@ -23,7 +23,7 @@
         "openapi-tools/generator-schema": "^0.1.0",
         "openapi-tools/test-data": "^0.1.0",
         "wyrihaximus/async-test-utilities": "^13.5.2",
-        "wyrihaximus/makefiles": "^0.14.6"
+        "wyrihaximus/makefiles": "^0.14.8"
     },
     "minimum-stability": "dev",
     "prefer-stable": true,
